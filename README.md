@@ -5,32 +5,32 @@ The `/scripts/wait` program is from [https://github.com/ufoscout/docker-compose-
 
 
 # Setup
-```
+```bash
 mkdir -p ~/docker-storage/sharddemo/{dummy,router1,router2,cfg1p,cfg1s1,cfg1s2,shrd1p,shrd1s1,shrd1s2,shrd2p,shrd2s1,shrd2s2}
 ```
 
 # Run
-```
+```bash
 docker-compose up
 ```
 
 # Test
 In a separate terminal, run
-```
+```bash
 docker exec -it sharddemo_router1_1 /bin/bash
 mongo
 ```
 
 Once in mongo console,
 
-```
+```javascript
 sh.status()
 use sharddemo
 db.movies.getShardDistribution()
 ```
 
 # Need to start all over? No problem
-```
+```bash
 docker-compose down
 rm -rf ~/docker-storage/sharddemo
 ```
