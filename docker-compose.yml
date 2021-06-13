@@ -1,0 +1,150 @@
+version: "3.9"
+services:
+  dummy:
+    image: mongo
+    command: mongod --port 27017 --bind_ip 0.0.0.0
+    depends_on:
+      - "router1"
+      - "router2"
+    volumes:
+      - ${HOME}/docker-storage/sharddemo/dummy:/data/db
+      - ./scripts:/scripts
+      - ./init:/docker-entrypoint-initdb.d/
+    environment:
+      WAIT_HOSTS: router1:27017, cfg1p:27017, shrd1p:27017, shrd2p:27017
+
+  router1:
+    image: mongo
+    ports:
+      - "3001:27017"
+    command: sh -c "/scripts/wait && mongos --configdb mongors1conf/cfg1p:27017,cfg1s1:27017,cfg1s2:27017 --port 27017 --bind_ip 0.0.0.0"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./scripts:/scripts
+      - ${HOME}/docker-storage/sharddemo/router1:/data/db
+    depends_on:
+      - "cfg1p"
+      - "shrd1p"
+      - "shrd2p"
+    environment:
+      WAIT_HOSTS: cfg1p:27017, cfg1s1:27017, cfg1s2:27017, shrd1p:27017, shrd1s1:27017, shrd1s2:27017, shrd2p:27017, shrd2s1:27017, shrd2s2:27017
+
+  router2:
+    image: mongo
+    ports:
+      - "3002:27017"
+    command: sh -c "/scripts/wait && mongos --configdb mongors1conf/cfg1p:27017,cfg1s1:27017,cfg1s2:27017 --port 27017 --bind_ip 0.0.0.0"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${HOME}/docker-storage/sharddemo/router2:/data/db
+      - ./scripts:/scripts
+    depends_on:
+      - "cfg1p"
+      - "cfg1s1"
+      - "cfg1s2"
+      - "shrd1p"
+      - "shrd2p"
+    environment:
+      WAIT_HOSTS: cfg1p:27017, cfg1s1:27017, cfg1s2:27017, shrd1p:27017, shrd1s1:27017, shrd1s2:27017, shrd2p:27017, shrd2s1:27017, shrd2s2:27017
+
+  cfg1p:
+    image: mongo
+    ports:
+      - "4001:27017"
+    command: sh -c "/scripts/wait && mongod --configsvr --replSet mongors1conf --dbpath /data/db --port 27017 --bind_ip 0.0.0.0"
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'mongors1conf',members:[{_id:0,host:\"cfg1p\",priority:3},{_id:1,host:\"cfg1s1\"},{_id:2,host:\"cfg1s2\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+    depends_on:
+      - "cfg1s1"
+      - "cfg1s2"
+    volumes:
+      - ./scripts:/scripts
+      - /etc/localtime:/etc/localtime:ro
+      - ${HOME}/docker-storage/sharddemo/cfg1p:/data/db
+    environment:
+      WAIT_HOSTS: cfg1s1:27017, cfg1s2:27017
+  cfg1s1:
+    image: mongo
+    ports:
+      - "4002:27017"
+    command: mongod --configsvr --replSet mongors1conf --dbpath /data/db --port 27017 --bind_ip 0.0.0.0
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${HOME}/docker-storage/sharddemo/cfg1s1:/data/db
+
+  cfg1s2:
+    image: mongo
+    ports:
+      - "4003:27017"
+    command: mongod --configsvr --replSet mongors1conf --dbpath /data/db --port 27017 --bind_ip 0.0.0.0
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${HOME}/docker-storage/sharddemo/cfg1s2:/data/db
+
+  shrd1p:
+    image: mongo
+    ports:
+      - "5001:27017"
+    volumes:
+      - ./scripts:/scripts
+      - ${HOME}/docker-storage/sharddemo/shrd1p:/data/db
+    command: sh -c "/scripts/wait && mongod --replSet shrd1 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16"
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'shrd1',members:[{_id:0,host:\"shrd1p\",priority:3},{_id:1,host:\"shrd1s1\"},{_id:2,host:\"shrd1s2\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+    depends_on:
+      - "shrd1s1"
+      - "shrd1s2"
+    environment:
+      WAIT_HOSTS: shrd1s1:27017, shrd1s2:27017
+
+  shrd1s1:
+    image: mongo
+    ports:
+      - "5002:27017"
+    volumes:
+      - ${HOME}/docker-storage/sharddemo/shrd1s1:/data/db
+    command: mongod --replSet shrd1 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16
+
+  shrd1s2:
+    image: mongo
+    ports:
+      - "5003:27017"
+    volumes:
+      - ${HOME}/docker-storage/sharddemo/shrd1s2:/data/db
+    command: mongod --replSet shrd1 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16
+
+  shrd2p:
+    image: mongo
+    ports:
+      - "6001:27017"
+    volumes:
+      - ./scripts:/scripts
+      - ${HOME}/docker-storage/sharddemo/shrd2p:/data/db
+    command: sh -c "/scripts/wait && mongod --replSet shrd2 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16"
+    healthcheck:
+      test: test $$(echo "rs.initiate({_id:'shrd2',members:[{_id:0,host:\"shrd2p\",priority:3},{_id:1,host:\"shrd2s1\"},{_id:2,host:\"shrd2s2\"}]}).ok || rs.status().ok" | mongo --port 27017 --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+    depends_on:
+      - "shrd2s1"
+      - "shrd2s2"
+    environment:
+      WAIT_HOSTS: shrd2s1:27017, shrd2s2:27017
+  shrd2s1:
+    image: mongo
+    ports:
+      - "6002:27017"
+    volumes:
+      - ${HOME}/docker-storage/sharddemo/shrd2s1:/data/db
+    command: mongod --replSet shrd2 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16
+  shrd2s2:
+    image: mongo
+    ports:
+      - "6003:27017"
+    volumes:
+      - ${HOME}/docker-storage/sharddemo/shrd2s2:/data/db
+    command: mongod --replSet shrd2 --shardsvr --port 27017 --bind_ip 0.0.0.0 --oplogSize 16
